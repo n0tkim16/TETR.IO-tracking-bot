@@ -1,3 +1,9 @@
+## July 26 ##
+
+The bot is still in alpha, as most of the analysis part (especially custom length analysis)
+
+Needs to work on how to send less than 2000 bytes all time
+
 ## July 23 ##
 
 Added methods that collects ranked game data and analyzes them
