@@ -1,3 +1,6 @@
+## August 3 ##
+Fixed bugs and bot works as intended. But requires a way to avoid byte limits.
+
 ## July 26 ##
 
 The bot is still in alpha, as most of the analysis part (especially custom length analysis)
