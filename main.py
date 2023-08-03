@@ -1,6 +1,6 @@
 import discord
 from discord.ext import tasks
-from datetime import date, datetime
+import datetime
 import pickle
 import os
 import config
@@ -19,15 +19,12 @@ def dump_pickle(filename: str, data):
     return
 
 def open_pickle(filename: str, default = {}):
-  ret = default
   try:
     with open(filename, 'rb') as f:
       ret = pickle.load(f)
       f.close()
   except:
-    with open(filename, 'wb') as f:
-      pickle.dump(ret, f)
-      f.close()
+    return default
   return ret
 
 def is_valid_date(y, m, d):
@@ -54,32 +51,32 @@ async def on_ready():
 async def track(ctx):
   track_list = open_pickle('./tetrio/track.p', set())
   you = tetr.tetrio_get_user(ctx.author.id)
-  if you['data'] == None:
+  if you == None:
     await ctx.respond('You have to link your discord account to your TETR.IO account.\n'
                       +"Here's how to do it.\n\n"
                       +'`1. Login to TETR.IO.`\n'
                       +'`2. Go to "config" -> "account".`\n'
                       +'`3. Go all the way down to "connections", then press "link".`', ephemeral = True)
     return
-  you_id = you['data']['user']['_id']
-  if you_id in track_list:
+  if you in track_list:
     await ctx.respond('You are already being tracked!', ephemeral = True)
     return
-  result = tetr.tetrio_get_match(you_id)
+  result = tetr.tetrio_get_match(you)
   if result == -1:
     await ctx.respond('You do not have Tetra League Rating!\n' +
                       'Play at least 10 Tetra League game to have your rating.', ephemeral = True)
     return
-  track_list.add(you_id)
+  track_list.add(you)
   dump_pickle('./tetrio/track.p',track_list)
+  you_info = tetr.tetrio_fetch_user(you)
   await ctx.respond('Started tracking!\n'
-                    +'TETR.IO username: `' + you['data']['user']['username'] + '`', ephemeral = True)
+                    +'TETR.IO username: `' + you_info['username'] + '`', ephemeral = True)
 
 @bot.slash_command(description = "Bot stops tracking you")
 async def untrack(ctx):
   track_list = open_pickle('./tetrio/track.p', set())
   you = tetr.tetrio_get_user(ctx.author.id)
-  if you['data'] == None:
+  if you == None:
     await ctx.respond('You have to link your discord account to your TETR.IO account.\n'
                       +"Here's how to do it.\n\n"
                       +'`1. Login to TETR.IO.`\n'
@@ -87,13 +84,12 @@ async def untrack(ctx):
                       +'`3. Go all the way down to "connections", then press "link".`', ephemeral = True)
     return
   
-  you_id = you['data']['user']['_id']
-  if you_id not in track_list:
+  if you not in track_list:
     await ctx.respond('You are not being tracked!\n' +
                       'Use `/track` to be tracked', ephemeral = True)
     return
   
-  track_list.remove(you_id)
+  track_list.remove(you)
   dump_pickle('./tetrio/track.p',track_list)
   await ctx.respond('Stopped tracking!', ephemeral = True)
 
@@ -101,31 +97,30 @@ async def untrack(ctx):
 async def analyze(ctx,
                   duration: discord.Option(str, 'Choose duration', choices = ['Today', 'Yesterday', 'Last 7 days']), # add Last 28 days, Last month, custom duration later
                   display: discord.Option(str, 'Choose display style', choices = ['Normal', 'Detailed'])): 
-  index = open_pickle('./tetrio/user/index.p')
+  index = open_pickle('./tetrio/index.p')
   if ctx.author.id not in index:
-    await ctx.send('You are not being tracked!\n' +
+    await ctx.respond('You are not being tracked!\n' +
                    'Use `/track` to be tracked and be able to use this command.', ephemeral = True)
     return
   tetrio_id = index[ctx.author.id]
-  date = date.today()
+  today = datetime.date.today()
   if duration == 'Today':
-    data, analysis = tetr.tetrio_analyze(tetrio_id, date.year, date.month, date.day, date.year, date.month, date.day)
+    data, analysis = tetr.tetrio_analyze(tetrio_id, today.year, today.month, today.day, today.year, today.month, today.day)
   if duration == 'Yesterday':
-    date = date - datetime.timedelta(days = 1)
-    data, analysis = tetr.tetrio_analyze(tetrio_id, date.year, date.month, date.day, date.year, date.month, date.day)
+    today = today - datetime.timedelta(days = 1)
+    data, analysis = tetr.tetrio_analyze(tetrio_id, today.year, today.month, today.day, today.year, today.month, today.day)
   if duration == 'Last 7 days':
-    date1 = date - datetime.timedelta(days = 6)
-    data, analysis = tetr.tetrio_analyze(tetrio_id, date1.year, date1.month, date1.day, date.year, date.month, date.day)
+    today1 = today - datetime.timedelta(days = 6)
+    data, analysis = tetr.tetrio_analyze(tetrio_id, today1.year, today1.month, today1.day, today.year, today.month, today.day)
   # if duration == 'Last 28 days':
-  #   date1 = date - datetime.timedelta(days = 27)
-  #   analyze_data = tetr.tetrio_analyze(tetrio_id, date1.year, date1.month, date1.day, date.year, date.month, date.day)
+  #   today1 = today - todaytime.timedelta(days = 27)
+  #   analyze_data = tetr.tetrio_analyze(tetrio_id, today1.year, today1.month, today1.day, today.year, today.month, today.day)
   # if duration == 'Last month':
   #   pass
   # if duration == 'Custom duration':
   #   await ctx.respond("Use `/analyze_custom` instead. Here's how to use it.\n" +
   #                     "`/analyze_custom 2023 01 01 2023 06 30` means you want to analyze your matches\n" +
   #                     "from January 1st 2023 to June 30th 2023.", ephemeral = True)
-
   # Output format:
   # 2023-07-01
   # vs asdf(24900 TR, 2950 glicko) 7:6
@@ -145,34 +140,32 @@ async def analyze(ctx,
   wins = 0
   loses = 0
   avg_glicko = 0
-  for i in range(data):
+  print(data)
+  for i in range(len(data)):
     wins_local = 0
     loses_local = 0
     msg = msg + data[i]['year'] + '-' + data[i]['month'] + '-' + data[i]['day'] + '\n'
     detail_msg = detail_msg + data[i]['year'] + '-' + data[i]['month'] + '-' + data[i]['day'] + '\n'
-    for j in range(data[i]['data']):
+    for j in range(len(data[i]['data'])):
       match = data[i]['data'][j]
       wins += match.player1['wins']
       loses += match.player2['wins']
       wins_local += match.player1['wins']
       loses_local += match.player2['wins']
-      detail_msg = detail_msg + 'vs `' + match.player2['username'] 
-      + '`(' + str(int(match.player2['TR'])) + 'TR, ' 
-      + str(int(match.player2['glicko'])) + ') '
-      + str(match.player1['wins']) + ':' + str(match.player2['wins']) + '\n'
-    msg = msg + str(wins_local + loses_local) + 'rounds, ' 
-    + str(wins_local) + 'wins, ' 
-    + str(loses_local) + 'loses, ' 
-    + str(round(float(100 * wins_local / (wins_local + loses_local)), 2)) + '%\n\n'
-    detail_msg = detail_msg + str(wins_local + loses_local) + 'rounds, ' 
-    + str(wins_local) + 'wins, ' 
-    + str(loses_local) + 'loses, ' 
-    + str(round(float(100 * wins_local / (wins_local + loses_local)), 2)) + '%\n\n\n'
+      detail_msg = detail_msg + 'vs `' + match.player2['username'] + '`(' + str(int(match.player2['TR'])) + 'TR, ' + str(int(match.player2['glicko'])) + ') ' + str(match.player1['wins']) + ':' + str(match.player2['wins']) + '\n'
+    msg = msg + str(wins_local + loses_local) + ' rounds, ' + str(wins_local) + ' wins, ' + str(loses_local) + ' loses, ' + str(round(float(100 * wins_local / (wins_local + loses_local)), 2)) + '%\n\n'
+    detail_msg = detail_msg + str(wins_local + loses_local) + ' rounds, ' + str(wins_local) + ' wins, ' + str(loses_local) + ' loses, ' + str(round(float(100 * wins_local / (wins_local + loses_local)), 2)) + '%\ n\n\n'
     
-    avg_glicko += (wins_local + loses_local) * data[i]['avg_glicko']
-  
+    avg_glicko += (wins_local + loses_local) * analysis[i]['avg_glicko']
+  if wins + loses == 0:
+    await ctx.respond(str(today.year) + ' ' + str(today.month) + ' ' + str(today.day), ephemeral = True)
+    # await ctx.respond('There is nothing to analyze!', ephemeral = True)
+    return
   avg_glicko /= (wins + loses)
-  msg = msg + ''
+  if display == 'Normal':
+    await ctx.respond(msg, ephemeral = True)
+  else:
+    await ctx.respond(detail_msg, ephemeral = True)
 
 
 
@@ -188,7 +181,7 @@ async def analyze(ctx,
 #                          d2: discord.Option(int, choices = [i for i in range(1,32)])):
 #   index = open_pickle('./tetrio/user/index.p')
 #   if ctx.author.id not in index:
-#     await ctx.send('You are not being tracked!\n' +
+#     await ctx.respond('You are not being tracked!\n' +
 #                    'Use `/track` to be tracked and be able to use this command.', ephemeral = True)
 #     return
 #   if (not is_valid_date(y1, m1, d1)) or (not is_valid_date(y2, m2, d2)):
@@ -200,11 +193,11 @@ async def analyze(ctx,
 #     await ctx.respond('Starting date should be prior to the end date.', ephemeral = True)
 #     return
 
-@bot.slash_command(description = "Gives detailed informations about commands")
-async def help(ctx,
-               command: discord.Option(str, 'Choose commands', choices = ['analyze'])):
-  if command == 'analyze':
-    pass
+# @bot.slash_command(description = "Gives detailed informations about commands")
+# async def help(ctx,
+#                command: discord.Option(str, 'Choose commands', choices = ['analyze'])):
+#   if command == 'analyze':
+#     pass
 
 @tasks.loop(seconds=30)
 async def update_user():
