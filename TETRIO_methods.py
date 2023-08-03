@@ -12,15 +12,12 @@ def dump_pickle(filename: str, data):
     return
 
 def open_pickle(filename: str, default = {}):
-  ret = default
   try:
     with open(filename, 'rb') as f:
       ret = pickle.load(f)
       f.close()
   except:
-    with open(filename, 'wb') as f:
-      pickle.dump(ret, f)
-      f.close()
+    return default
   return ret
 
 ########################################################################
@@ -70,7 +67,7 @@ class tetrio_user: # Saved at ./tetrio/user/{id}
 ########################################################################
 
 def tetrio_get_user(discord_id): # Gets tetrio id of the discord user. If does not exist, return None
-  discord_id_to_tetrio_id = open_pickle('./tetrio/user/index.p')
+  discord_id_to_tetrio_id = open_pickle('./tetrio/index.p')
   if discord_id in discord_id_to_tetrio_id:
     return discord_id_to_tetrio_id[discord_id]
   
@@ -83,7 +80,7 @@ def tetrio_get_user(discord_id): # Gets tetrio id of the discord user. If does n
   user_id = ret['data']['user']['_id']
   os.makedirs('./tetrio/users/' + user_id, exist_ok=True)
   discord_id_to_tetrio_id[discord_id] = user_id
-  dump_pickle('./tetrio/user/index.p', discord_id_to_tetrio_id)
+  dump_pickle('./tetrio/index.p', discord_id_to_tetrio_id)
 
   user_data = tetrio_fetch_user(user_id)
   user = tetrio_user(user_id, ret['data']['user']['username'], discord_id, user_data['league']['rating'], user_data['league']['glicko'])
@@ -113,7 +110,7 @@ def tetrio_get_match(tetrio_id): #Gets new match infos of the tetrio user.
     yy, mm, dd = yymmdd.split('-')
     hh, mi, ss = hhmiss.split(':')
     ss = ss.split('.')[0]
-    date = datetime(yy, mm, dd, hh, mi, ss)
+    date = datetime(int(yy), int(mm), int(dd), int(hh), int(mi), int(ss))
 
     player1 = {'id': '', 'TR': 0, 'glicko': 0, 'wins': 0}
     player2 = {'id': '', 'TR': 0, 'glicko': 0, 'wins': 0}
@@ -165,8 +162,12 @@ def glicko_to_winrate(dif):
   return 1 / (1 + math.pow(10,dif/400))
 
 def ranked_by_day(id, yy, mm, dd):
-  dir = './tetrio/users/' + id + '/' + str(yy) + '/' + str(mm) + '/' + str(dd)
-  replays = os.listdir(dir)
+  dir = './tetrio/users/' + id + '/matches/' + str(yy) + '/' + str(mm) + '/' + str(dd)
+  try:
+    replays = os.listdir(dir)
+    replays.sort()
+  except:
+    return None
   data = []
   for i in range(len(replays)):
     data.append(open_pickle(dir + '/' + replays[i])) # brings class "match"
@@ -180,7 +181,14 @@ def ranked_by_duration(id, y1, m1, d1, y2, m2, d2):
   for i in range(delta.days + 1):
     current_date = (date1 + timedelta(days=i))
     yy, mm, dd = current_date.year, current_date.month, current_date.day
-    ret.append({'year': yy, 'month': mm, 'day': dd, 'data': ranked_by_day(id, yy, mm, dd)})
+    if mm < 10:
+      mm = '0' + str(mm)
+    if dd < 10:
+      dd = '0' + str(dd)
+    data = ranked_by_day(id, yy, mm, dd)
+    if data == [] or data == None:
+      continue
+    ret.append({'year': str(yy), 'month': mm, 'day': dd, 'data': data})
   return ret
 
 def analyze_ranked_data(data):
@@ -189,13 +197,13 @@ def analyze_ranked_data(data):
   avg_glicko = 0
   glicko_dif = 0
   TR_dif = 0
-  for i in range(len(data)):
-    w1, w2 = data[i].get_scores()
+  for i in range(len(data['data'])):
+    w1, w2 = data['data'][i].get_scores()
     wins += w1
     loses += w2
-    avg_glicko += (w1 + w2) * data[i].player2['glicko']
-    glicko_dif += data[i].get_glicko_dif()
-    TR_dif += data[i].get_TR_dif()
+    avg_glicko += (w1 + w2) * data['data'][i].player2['glicko']
+    glicko_dif += data['data'][i].get_glicko_dif()
+    TR_dif += data['data'][i].get_TR_dif()
 
   avg_glicko /= float(wins + loses)
   if wins == 0:
@@ -211,7 +219,7 @@ def analyze_ranked_data(data):
 def tetrio_analyze(tetrio_id, y1, m1, d1, y2, m2, d2):
   ranked_data = ranked_by_duration(tetrio_id, y1, m1, d1, y2, m2, d2)
   ranked_analysis = []
-  for i in range(ranked_data):
+  for i in range(len(ranked_data)):
     wins, loses, avg_glicko, performance, glicko_dif, TR_dif = analyze_ranked_data(ranked_data[i])
     ranked_analysis.append({'wins': wins, 'loses': loses, 'avg_glicko': avg_glicko, 'performance': performance, 'glicko_dif': glicko_dif, 'TR_dif': TR_dif})
   return ranked_data, ranked_analysis
