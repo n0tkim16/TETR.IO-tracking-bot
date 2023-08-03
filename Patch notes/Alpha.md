@@ -1,5 +1,7 @@
 ## August 3 ##
+
 Fixed bugs and bot works as intended. But requires a way to avoid byte limits.
+
 Added more functions
 
 ## July 26 ##
