@@ -69,8 +69,7 @@ async def track(ctx):
   track_list.add(you)
   dump_pickle('./tetrio/track.p',track_list)
   you_info = tetr.tetrio_fetch_user(you)
-  await ctx.respond('Started tracking!\n'
-                    +'TETR.IO username: `' + you_info['username'] + '`', ephemeral = True)
+  await ctx.respond('Started tracking!\nTETR.IO username: `' + you_info['username'] + '`', ephemeral = True)
 
 @bot.slash_command(description = "Bot stops tracking you")
 async def untrack(ctx):
@@ -96,11 +95,11 @@ async def untrack(ctx):
 @bot.slash_command(description = "Analyzes your Tetra League games at given duration.")
 async def analyze(ctx,
                   duration: discord.Option(str, 'Choose duration', choices = ['Today', 'Yesterday', 'Last 7 days']), # add Last 28 days, Last month, custom duration later
-                  display: discord.Option(str, 'Choose display style', choices = ['Normal', 'Detailed'])): 
+                  display: discord.Option(str, 'Choose display style', choices = ['Normal', 'Detailed']),
+                  public: discord.Option(str, 'Choose if others can see the analysis', choices = ['True', 'False'])): 
   index = open_pickle('./tetrio/index.p')
   if ctx.author.id not in index:
-    await ctx.respond('You are not being tracked!\n' +
-                   'Use `/track` to be tracked and be able to use this command.', ephemeral = True)
+    await ctx.respond('You are not being tracked!\nUse `/track` to be tracked and be able to use this command.', ephemeral = True)
     return
   tetrio_id = index[ctx.author.id]
   today = datetime.date.today()
@@ -154,7 +153,7 @@ async def analyze(ctx,
       loses_local += match.player2['wins']
       detail_msg = detail_msg + 'vs `' + match.player2['username'] + '`(' + str(int(match.player2['TR'])) + 'TR, ' + str(int(match.player2['glicko'])) + ') ' + str(match.player1['wins']) + ':' + str(match.player2['wins']) + '\n'
     msg = msg + str(wins_local + loses_local) + ' rounds, ' + str(wins_local) + ' wins, ' + str(loses_local) + ' loses, ' + str(round(float(100 * wins_local / (wins_local + loses_local)), 2)) + '%\n\n'
-    detail_msg = detail_msg + str(wins_local + loses_local) + ' rounds, ' + str(wins_local) + ' wins, ' + str(loses_local) + ' loses, ' + str(round(float(100 * wins_local / (wins_local + loses_local)), 2)) + '%\ n\n\n'
+    detail_msg = detail_msg + str(wins_local + loses_local) + ' rounds, ' + str(wins_local) + ' wins, ' + str(loses_local) + ' loses, ' + str(round(float(100 * wins_local / (wins_local + loses_local)), 2)) + '%\n\n'
     
     avg_glicko += (wins_local + loses_local) * analysis[i]['avg_glicko']
   if wins + loses == 0:
@@ -163,9 +162,25 @@ async def analyze(ctx,
     return
   avg_glicko /= (wins + loses)
   if display == 'Normal':
-    await ctx.respond(msg, ephemeral = True)
+    if public == 'True':
+      await ctx.respond(msg)
+    else:
+      await ctx.respond(msg, ephemeral = True)
   else:
-    await ctx.respond(detail_msg, ephemeral = True)
+    if public == 'True':
+      await ctx.respond(detail_msg)
+    else:
+      await ctx.respond(detail_msg, ephemeral = True)
+
+@bot.slash_command(description = 'Gives information about other commands')
+async def help(ctx):
+  await ctx.respond('`/help` : Gives information about other commands\n' + 
+                 '`/track` : Bot starts tracking you\n' + 
+                 '`/untrack` : Bot stops tracking you\n' + 
+                 '`/analyze (duration) (display) (public)` : Analyzes your Tetra League games at given duration.\n' + 
+                 '(duration) sets the duration to analyze your Tetra League games.\n' +
+                 '(display) sets the detailness of the analysis.\n' + 
+                 '(public) sets if the analysis is public or not.')
 
 
 
